@@ -1,3 +1,11 @@
+import streamlit as st
+import os
+from moviepy.editor import VideoFileClip
+import google.generativeai as genai
+from pathlib import Path
+import tempfile
+
+
 # Configure page
 st.set_page_config(page_title="Meeting Summarizer", layout="wide")
 
