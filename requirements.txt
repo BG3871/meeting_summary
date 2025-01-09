@@ -1,3 +1,5 @@
 moviepy
 google-generativeai
 imageio-ffmpeg
+openai-whisper
+torch
