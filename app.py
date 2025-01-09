@@ -1,10 +1,11 @@
 import streamlit as st
 import os
-from moviepy import VideoFileClip
+from moviepy.editor import VideoFileClip
 import google.generativeai as genai
 from pathlib import Path
 import tempfile
-
+import whisper
+import torch
 
 # Configure page
 st.set_page_config(page_title="Meeting Summarizer", layout="wide")
@@ -14,6 +15,12 @@ GOOGLE_API_KEY = st.secrets["GOOGLE_API_KEY"]
 genai.configure(api_key=GOOGLE_API_KEY)
 model = genai.GenerativeModel('gemini-pro')
 
+@st.cache_resource
+def load_whisper_model():
+    """Load Whisper model - cached to prevent reloading"""
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    return whisper.load_model("base", device=device)
+
 def extract_audio(video_path, output_path):
     """Extract audio from video file"""
     video = VideoFileClip(video_path)
@@ -22,16 +29,24 @@ def extract_audio(video_path, output_path):
     video.close()
     audio.close()
 
-def transcribe_and_summarize(audio_path):
-    """Transcribe audio and generate summary using Gemini"""
-    # Note: In a real implementation, you'd want to use a speech-to-text service here
-    # For this example, we'll simulate it with a direct prompt to Gemini
-    prompt = """
-    Please provide a concise summary of the meeting recording, including:
-    1. Key discussion points
-    2. Action items
-    3. Decisions made
-    4. Next steps
+def transcribe_audio(audio_path):
+    """Transcribe audio using Whisper"""
+    whisper_model = load_whisper_model()
+    result = whisper_model.transcribe(audio_path)
+    return result["text"]
+
+def generate_summary(transcript):
+    """Generate summary using Gemini"""
+    prompt = f"""
+    Based on the following meeting transcript, please provide a comprehensive summary:
+    
+    {transcript}
+    
+    Please structure the summary as follows:
+    1. Key Discussion Points
+    2. Action Items
+    3. Decisions Made
+    4. Next Steps
     
     Format the output in a clear, professional manner.
     """
@@ -42,6 +57,10 @@ def transcribe_and_summarize(audio_path):
 def main():
     st.title("Meeting Summarization Tool")
     st.write("Upload your meeting recording (MP4) to get a comprehensive summary.")
+    
+    # Display model information
+    device = "GPU 🚀" if torch.cuda.is_available() else "CPU"
+    st.info(f"Running Whisper on: {device}")
     
     # File uploader
     video_file = st.file_uploader("Choose a video file", type=['mp4'])
@@ -56,23 +75,42 @@ def main():
             audio_path = tmp_audio.name
         
         try:
-            with st.spinner("Processing video..."):
-                # Extract audio
+            # Progress bar
+            progress_bar = st.progress(0)
+            
+            # Extract audio
+            with st.spinner("Extracting audio from video..."):
                 extract_audio(video_path, audio_path)
+                progress_bar.progress(33)
+            
+            # Transcribe audio
+            with st.spinner("Transcribing audio with Whisper..."):
+                transcript = transcribe_audio(audio_path)
+                progress_bar.progress(66)
                 
-                # Get summary
-                summary = transcribe_and_summarize(audio_path)
+                # Display transcript
+                st.subheader("Meeting Transcript")
+                transcript_area = st.text_area("Transcript", value=transcript, height=200)
+            
+            # Generate summary
+            with st.spinner("Generating summary with Gemini..."):
+                summary = generate_summary(transcript)
+                progress_bar.progress(100)
                 
                 # Display summary
                 st.subheader("Meeting Summary")
-                st.text_area("Summary", value=summary, height=300)
-                
-                # Copy button
-                if st.button("Copy Summary to Clipboard"):
-                    st.code(f"""
-                    # Use this command to copy the summary:
-                    {summary}
-                    """)
+                summary_area = st.text_area("Summary", value=summary, height=300)
+            
+            # Copy buttons in columns
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("Copy Transcript"):
+                    st.code(transcript)
+                    st.success("Transcript copied to clipboard!")
+            
+            with col2:
+                if st.button("Copy Summary"):
+                    st.code(summary)
                     st.success("Summary copied to clipboard!")
                 
         except Exception as e:
