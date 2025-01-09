@@ -1,6 +1,6 @@
 import streamlit as st
 import os
-from moviepy.editor import VideoFileClip
+from moviepy import VideoFileClip
 import google.generativeai as genai
 from pathlib import Path
 import tempfile
