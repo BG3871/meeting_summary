@@ -1,4 +1,2 @@
-moviepy.editor
-google.generativeai
-pathlib
-tempfile
+moviepy
+google-generativeai
